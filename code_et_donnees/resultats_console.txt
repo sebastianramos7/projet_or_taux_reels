@@ -1,0 +1,2491 @@
+
+> set.seed(123)
+
+> dir.create("figures", showWarnings = FALSE)
+
+> png(file.path("figures", "fig_%02d.png"), width = 1000, 
++     height = 650, res = 120)
+
+> library(readxl)
+
+> library(xts)
+Loading required package: zoo
+
+Attaching package: ‘zoo’
+
+The following objects are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+
+> library(urca)
+
+> library(tseries)
+Registered S3 method overwritten by 'quantmod':
+  method            from
+  as.zoo.data.frame zoo 
+
+> library(forecast)
+
+> library(FinTS)
+
+Attaching package: ‘FinTS’
+
+The following object is masked from ‘package:forecast’:
+
+    Acf
+
+
+> library(vars)
+Loading required package: MASS
+Loading required package: strucchange
+Loading required package: sandwich
+Loading required package: lmtest
+
+> or_brut <- read_excel("CMO-Historical-Data-Monthly.xlsx", 
++     sheet = "Monthly Prices", skip = 4)
+New names:
+• `` -> `...1`
+
+> head(or_brut[, c(1, 70)])
+# A tibble: 6 × 2
+  ...1    Gold       
+  <chr>   <chr>      
+1 <NA>    ($/troy oz)
+2 1960M01 35         
+3 1960M02 35         
+4 1960M03 35         
+5 1960M04 35         
+6 1960M05 35         
+
+> or_brut <- or_brut[-1, ]
+
+> date_or <- as.Date(paste0(substr(or_brut[[1]], 1, 
++     4), "-", substr(or_brut[[1]], 6, 7), "-01"))
+
+> or_temp <- xts(as.numeric(or_brut$Gold), order.by = date_or)
+
+> tr_brut <- read.csv("FII10.csv")
+
+> dol_brut <- read.csv("TWEXBGSMTH.csv")
+
+> head(tr_brut)
+  observation_date FII10
+1       2003-01-01  2.29
+2       2003-02-01  1.99
+3       2003-03-01  1.94
+4       2003-04-01  2.18
+5       2003-05-01  1.91
+6       2003-06-01  1.72
+
+> head(dol_brut)
+  observation_date TWEXBGSMTH
+1       2006-01-01   100.0000
+2       2006-02-01   100.2112
+3       2006-03-01   100.4281
+4       2006-04-01    99.7435
+5       2006-05-01    97.5118
+6       2006-06-01    98.6927
+
+> tr_temp <- xts(tr_brut$FII10, order.by = as.Date(tr_brut$observation_date))
+
+> dol_temp <- xts(dol_brut$TWEXBGSMTH, order.by = as.Date(dol_brut$observation_date))
+
+> lor_temp <- log(or_temp)
+
+> ldol_temp <- log(dol_temp)
+
+> lor_complet <- lor_temp["2006-01-01/2025-12-01"]
+
+> tr_complet <- tr_temp["2006-01-01/2025-12-01"]
+
+> ldol_complet <- ldol_temp["2006-01-01/2025-12-01"]
+
+> length(lor_complet)
+[1] 240
+
+> length(tr_complet)
+[1] 240
+
+> length(ldol_complet)
+[1] 240
+
+> plot(exp(lor_complet), main = "Prix de l'or ($/once), 2006-2025")
+
+> plot(tr_complet, main = "Taux réel américain à 10 ans (TIPS, %), 2006-2025")
+
+> plot(exp(ldol_complet), main = "Indice large du dollar, 2006-2025")
+
+> periode <- ifelse(index(lor_complet) < as.Date("2022-01-01"), 
++     "black", "red")
+
+> plot(as.numeric(tr_complet), as.numeric(lor_complet), 
++     col = periode, pch = 16, xlab = "Taux réel 10 ans (%)", 
++     ylab = "log(prix de l'or)", main = "Or et taux réel : 2006-2021 (noir) et 2022-2025 (rouge)")
+
+> legend("bottomleft", legend = c("2006-2021", "2022-2025"), 
++     col = c("black", "red"), pch = 16)
+
+> eq_complet <- lm(lor_complet ~ tr_complet)
+
+> summary(eq_complet)
+
+Call:
+lm(formula = lor_complet ~ tr_complet)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.77542 -0.18382 -0.06790  0.09679  1.27001 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  7.32495    0.03197 229.085  < 2e-16 ***
+tr_complet  -0.11921    0.02456  -4.853  2.2e-06 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.3803 on 238 degrees of freedom
+Multiple R-squared:  0.09006,	Adjusted R-squared:  0.08624 
+F-statistic: 23.56 on 1 and 238 DF,  p-value: 2.197e-06
+
+
+> resid_complet <- xts(as.numeric(residuals(eq_complet)), 
++     order.by = index(lor_complet))
+
+> plot(resid_complet, main = "Résidus de log(or) ~ taux réel, 2006-2025")
+
+> summary(ur.df(resid_complet, type = "none", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.125830 -0.013124  0.007183  0.027343  0.120985 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)  
+z.lag.1    0.008936   0.006145   1.454   0.1473  
+z.diff.lag 0.148728   0.065491   2.271   0.0241 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03425 on 236 degrees of freedom
+Multiple R-squared:  0.03609,	Adjusted R-squared:  0.02792 
+F-statistic: 4.418 on 2 and 236 DF,  p-value: 0.01307
+
+
+Value of test-statistic is: 1.454 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> lor <- lor_temp["2006-01-01/2019-12-01"]
+
+> tr <- tr_temp["2006-01-01/2019-12-01"]
+
+> ldol <- ldol_temp["2006-01-01/2019-12-01"]
+
+> length(lor)
+[1] 168
+
+> plot(lor, main = "log(prix de l'or), 2006-2019")
+
+> plot(tr, main = "Taux réel à 10 ans (%), 2006-2019")
+
+> plot(ldol, main = "log(indice du dollar), 2006-2019")
+
+> acf(lor, main = "ACF de log(or)")
+
+> pacf(lor, main = "PACF de log(or)")
+
+> acf(tr, main = "ACF du taux réel")
+
+> pacf(tr, main = "PACF du taux réel")
+
+> acf(ldol, main = "ACF de log(dollar)")
+
+> pacf(ldol, main = "PACF de log(dollar)")
+
+> dlor <- diff(lor)[-1, ]
+
+> dtr <- diff(tr)[-1, ]
+
+> dldol <- diff(ldol)[-1, ]
+
+> plot(dlor, main = "Variation de log(or) (rendement mensuel)")
+
+> plot(dtr, main = "Variation du taux réel (points de %)")
+
+> plot(dldol, main = "Variation de log(dollar)")
+
+> acf(dlor, main = "ACF de d.log(or)")
+
+> pacf(dlor, main = "PACF de d.log(or)")
+
+> acf(dtr, main = "ACF de d.taux réel")
+
+> pacf(dtr, main = "PACF de d.taux réel")
+
+> acf(dldol, main = "ACF de d.log(dollar)")
+
+> pacf(dldol, main = "PACF de d.log(dollar)")
+
+> df3_lor <- ur.df(lor, type = "trend", selectlags = "BIC")
+
+> summary(df3_lor)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression trend 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + tt + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.154283 -0.024586 -0.002323  0.026114  0.112279 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)  
+(Intercept)  1.970e-01  9.375e-02   2.102   0.0371 *
+z.lag.1     -2.740e-02  1.393e-02  -1.967   0.0509 .
+tt           1.425e-05  8.370e-05   0.170   0.8650  
+z.diff.lag   1.127e-01  7.725e-02   1.459   0.1466  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03913 on 162 degrees of freedom
+Multiple R-squared:  0.04964,	Adjusted R-squared:  0.03204 
+F-statistic:  2.82 on 3 and 162 DF,  p-value: 0.0407
+
+
+Value of test-statistic is: -1.967 2.9327 2.9737 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau3 -3.99 -3.43 -3.13
+phi2  6.22  4.75  4.07
+phi3  8.43  6.49  5.47
+
+
+> df2_lor <- ur.df(lor, type = "drift", selectlags = "BIC")
+
+> summary(df2_lor)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.154461 -0.024917 -0.001643  0.025926  0.111577 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)  
+(Intercept)  0.18747    0.07477   2.507   0.0131 *
+z.lag.1     -0.02587    0.01060  -2.440   0.0158 *
+z.diff.lag   0.11112    0.07648   1.453   0.1482  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03902 on 163 degrees of freedom
+Multiple R-squared:  0.04947,	Adjusted R-squared:  0.0378 
+F-statistic: 4.241 on 2 and 163 DF,  p-value: 0.01601
+
+
+Value of test-statistic is: -2.4401 4.4108 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> df1_lor <- ur.df(lor, type = "none", selectlags = "BIC")
+
+> summary(df1_lor)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.141215 -0.023279 -0.003935  0.024787  0.103187 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)
+z.lag.1    0.0006913  0.0004411   1.567    0.119
+z.diff.lag 0.1228665  0.0775567   1.584    0.115
+
+Residual standard error: 0.03964 on 164 degrees of freedom
+Multiple R-squared:  0.03422,	Adjusted R-squared:  0.02244 
+F-statistic: 2.905 on 2 and 164 DF,  p-value: 0.05756
+
+
+Value of test-statistic is: 1.567 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> df3_tr <- ur.df(tr, type = "trend", selectlags = "BIC")
+
+> summary(df3_tr)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression trend 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + tt + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.67585 -0.08732  0.00019  0.09448  0.88888 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)   
+(Intercept)  0.0698602  0.0474702   1.472   0.1431   
+z.lag.1     -0.0453704  0.0206876  -2.193   0.0297 * 
+tt          -0.0004655  0.0003721  -1.251   0.2127   
+z.diff.lag   0.2385774  0.0763075   3.127   0.0021 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1705 on 162 degrees of freedom
+Multiple R-squared:  0.07471,	Adjusted R-squared:  0.05757 
+F-statistic:  4.36 on 3 and 162 DF,  p-value: 0.005543
+
+
+Value of test-statistic is: -2.1931 1.7892 2.4478 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau3 -3.99 -3.43 -3.13
+phi2  6.22  4.75  4.07
+phi3  8.43  6.49  5.47
+
+
+> df2_tr <- ur.df(tr, type = "drift", selectlags = "BIC")
+
+> summary(df2_tr)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.68625 -0.08910 -0.00275  0.09177  0.89775 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)   
+(Intercept)  0.01536    0.01889   0.813  0.41736   
+z.lag.1     -0.02804    0.01539  -1.822  0.07031 . 
+z.diff.lag   0.22798    0.07597   3.001  0.00311 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1708 on 163 degrees of freedom
+Multiple R-squared:  0.06577,	Adjusted R-squared:  0.0543 
+F-statistic: 5.737 on 2 and 163 DF,  p-value: 0.003909
+
+
+Value of test-statistic is: -1.8218 1.8946 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> df1_tr <- ur.df(tr, type = "none", selectlags = "BIC")
+
+> summary(df1_tr)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.69569 -0.08392  0.00294  0.10182  0.89776 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)   
+z.lag.1    -0.01914    0.01081  -1.770  0.07850 . 
+z.diff.lag  0.22150    0.07547   2.935  0.00382 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1707 on 164 degrees of freedom
+Multiple R-squared:  0.06601,	Adjusted R-squared:  0.05462 
+F-statistic: 5.795 on 2 and 164 DF,  p-value: 0.003699
+
+
+Value of test-statistic is: -1.7705 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> df3_ldol <- ur.df(ldol, type = "trend", selectlags = "BIC")
+
+> summary(df3_ldol)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression trend 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + tt + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.024776 -0.007282 -0.000936  0.006033  0.060959 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  1.742e-01  6.673e-02   2.610  0.00990 ** 
+z.lag.1     -3.916e-02  1.490e-02  -2.628  0.00940 ** 
+tt           7.781e-05  2.984e-05   2.607  0.00997 ** 
+z.diff.lag   4.154e-01  7.054e-02   5.889 2.18e-08 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01225 on 162 degrees of freedom
+Multiple R-squared:  0.2094,	Adjusted R-squared:  0.1948 
+F-statistic:  14.3 on 3 and 162 DF,  p-value: 2.586e-08
+
+
+Value of test-statistic is: -2.6284 2.7121 3.9333 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau3 -3.99 -3.43 -3.13
+phi2  6.22  4.75  4.07
+phi3  8.43  6.49  5.47
+
+
+> df2_ldol <- ur.df(ldol, type = "drift", selectlags = "BIC")
+
+> summary(df2_ldol)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.028700 -0.008238 -0.000789  0.006798  0.059313 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.04795    0.04674   1.026    0.306    
+z.lag.1     -0.01031    0.01015  -1.016    0.311    
+z.diff.lag   0.42310    0.07172   5.899 2.05e-08 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01246 on 163 degrees of freedom
+Multiple R-squared:  0.1762,	Adjusted R-squared:  0.1661 
+F-statistic: 17.44 on 2 and 163 DF,  p-value: 1.373e-07
+
+
+Value of test-statistic is: -1.0155 0.6459 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> df1_ldol <- ur.df(ldol, type = "none", selectlags = "BIC")
+
+> summary(df1_ldol)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.029029 -0.007847 -0.001380  0.006754  0.060486 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    0.0001030  0.0002107   0.489    0.625    
+z.diff.lag 0.4138381  0.0711612   5.816 3.08e-08 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01246 on 164 degrees of freedom
+Multiple R-squared:  0.1743,	Adjusted R-squared:  0.1643 
+F-statistic: 17.32 on 2 and 164 DF,  p-value: 1.504e-07
+
+
+Value of test-statistic is: 0.489 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> summary(ur.df(dlor, type = "drift", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.139820 -0.023951 -0.004466  0.023921  0.103159 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.005340   0.003163   1.688   0.0933 .  
+z.lag.1     -0.901378   0.104155  -8.654 4.71e-15 ***
+z.diff.lag   0.025999   0.078613   0.331   0.7413    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03983 on 162 degrees of freedom
+Multiple R-squared:  0.4397,	Adjusted R-squared:  0.4327 
+F-statistic: 63.55 on 2 and 162 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic is: -8.6542 37.448 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> summary(ur.df(dtr, type = "drift", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.66012 -0.09767 -0.00626  0.09280  0.88101 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.01084    0.01343  -0.807    0.421    
+z.lag.1     -0.85662    0.09772  -8.766  2.4e-15 ***
+z.diff.lag   0.09094    0.07805   1.165    0.246    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.172 on 162 degrees of freedom
+Multiple R-squared:  0.399,	Adjusted R-squared:  0.3916 
+F-statistic: 53.77 on 2 and 162 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic is: -8.7662 38.4264 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> summary(ur.df(dldol, type = "drift", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.026412 -0.008445 -0.001682  0.006947  0.062397 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.0005529  0.0009732   0.568    0.571    
+z.lag.1     -0.6522015  0.0846158  -7.708 1.22e-12 ***
+z.diff.lag   0.1124940  0.0781201   1.440    0.152    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01246 on 162 degrees of freedom
+Multiple R-squared:  0.3017,	Adjusted R-squared:  0.2931 
+F-statistic:    35 on 2 and 162 DF,  p-value: 2.327e-13
+
+
+Value of test-statistic is: -7.7078 29.7065 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> summary(ur.df(dlor, type = "none", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.137808 -0.018021  0.000554  0.029460  0.107830 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.866725   0.102690  -8.440 1.64e-14 ***
+z.diff.lag  0.008371   0.078358   0.107    0.915    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.04006 on 163 degrees of freedom
+Multiple R-squared:  0.4298,	Adjusted R-squared:  0.4228 
+F-statistic: 61.43 on 2 and 163 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic is: -8.4402 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> summary(ur.df(dtr, type = "none", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.67432 -0.10841 -0.01769  0.08247  0.86926 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.85012    0.09728  -8.739 2.74e-15 ***
+z.diff.lag  0.08771    0.07786   1.126    0.262    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1718 on 163 degrees of freedom
+Multiple R-squared:  0.3966,	Adjusted R-squared:  0.3892 
+F-statistic: 53.57 on 2 and 163 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic is: -8.7387 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> summary(ur.df(dldol, type = "none", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.025919 -0.007854 -0.001139  0.007514  0.062845 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.64833    0.08417  -7.703 1.22e-12 ***
+z.diff.lag  0.11050    0.07788   1.419    0.158    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01243 on 163 degrees of freedom
+Multiple R-squared:  0.3003,	Adjusted R-squared:  0.2917 
+F-statistic: 34.98 on 2 and 163 DF,  p-value: 2.286e-13
+
+
+Value of test-statistic is: -7.703 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> summary(ur.kpss(lor, type = "mu"))
+
+####################### 
+# KPSS Unit Root Test # 
+####################### 
+
+Test is of type: mu with 4 lags. 
+
+Value of test-statistic is: 1.7692 
+
+Critical value for a significance level of: 
+                10pct  5pct 2.5pct  1pct
+critical values 0.347 0.463  0.574 0.739
+
+
+> summary(ur.kpss(tr, type = "mu"))
+
+####################### 
+# KPSS Unit Root Test # 
+####################### 
+
+Test is of type: mu with 4 lags. 
+
+Value of test-statistic is: 1.9136 
+
+Critical value for a significance level of: 
+                10pct  5pct 2.5pct  1pct
+critical values 0.347 0.463  0.574 0.739
+
+
+> summary(ur.kpss(ldol, type = "mu"))
+
+####################### 
+# KPSS Unit Root Test # 
+####################### 
+
+Test is of type: mu with 4 lags. 
+
+Value of test-statistic is: 2.2928 
+
+Critical value for a significance level of: 
+                10pct  5pct 2.5pct  1pct
+critical values 0.347 0.463  0.574 0.739
+
+
+> summary(ur.pp(lor, type = "Z-tau", model = "constant"))
+
+################################## 
+# Phillips-Perron Unit Root Test # 
+################################## 
+
+Test regression with intercept 
+
+
+Call:
+lm(formula = y ~ y.l1)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.143956 -0.023103 -0.001366  0.025185  0.114167 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.18805    0.07322   2.568   0.0111 *  
+y.l1         0.97413    0.01039  93.726   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03905 on 165 degrees of freedom
+Multiple R-squared:  0.9816,	Adjusted R-squared:  0.9815 
+F-statistic:  8785 on 1 and 165 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic, type: Z-tau  is: -2.4491 
+
+         aux. Z statistics
+Z-tau-mu            2.5231
+
+Critical values for Z statistics: 
+                     1pct      5pct     10pct
+critical values -3.470471 -2.878795 -2.575871
+
+
+> summary(ur.pp(tr, type = "Z-tau", model = "constant"))
+
+################################## 
+# Phillips-Perron Unit Root Test # 
+################################## 
+
+Test regression with intercept 
+
+
+Call:
+lm(formula = y ~ y.l1)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.66170 -0.09661 -0.00835  0.09437  0.93399 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 0.009255   0.019192   0.482     0.63    
+y.l1        0.976624   0.015584  62.667   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1745 on 165 degrees of freedom
+Multiple R-squared:  0.9597,	Adjusted R-squared:  0.9594 
+F-statistic:  3927 on 1 and 165 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic, type: Z-tau  is: -1.6507 
+
+         aux. Z statistics
+Z-tau-mu            0.6574
+
+Critical values for Z statistics: 
+                     1pct      5pct     10pct
+critical values -3.470471 -2.878795 -2.575871
+
+
+> summary(ur.pp(ldol, type = "Z-tau", model = "constant"))
+
+################################## 
+# Phillips-Perron Unit Root Test # 
+################################## 
+
+Test regression with intercept 
+
+
+Call:
+lm(formula = y ~ y.l1)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.032779 -0.008861 -0.000772  0.007454  0.070486 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.01323    0.05076   0.261    0.795    
+y.l1         0.99732    0.01103  90.436   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01364 on 165 degrees of freedom
+Multiple R-squared:  0.9802,	Adjusted R-squared:  0.9801 
+F-statistic:  8179 on 1 and 165 DF,  p-value: < 2.2e-16
+
+
+Value of test-statistic, type: Z-tau  is: -0.7344 
+
+         aux. Z statistics
+Z-tau-mu            0.7471
+
+Critical values for Z statistics: 
+                     1pct      5pct     10pct
+critical values -3.470471 -2.878795 -2.575871
+
+
+> summary(ur.kpss(dlor, type = "mu"))
+
+####################### 
+# KPSS Unit Root Test # 
+####################### 
+
+Test is of type: mu with 4 lags. 
+
+Value of test-statistic is: 0.3728 
+
+Critical value for a significance level of: 
+                10pct  5pct 2.5pct  1pct
+critical values 0.347 0.463  0.574 0.739
+
+
+> summary(ur.kpss(dtr, type = "mu"))
+
+####################### 
+# KPSS Unit Root Test # 
+####################### 
+
+Test is of type: mu with 4 lags. 
+
+Value of test-statistic is: 0.0716 
+
+Critical value for a significance level of: 
+                10pct  5pct 2.5pct  1pct
+critical values 0.347 0.463  0.574 0.739
+
+
+> summary(ur.kpss(dldol, type = "mu"))
+
+####################### 
+# KPSS Unit Root Test # 
+####################### 
+
+Test is of type: mu with 4 lags. 
+
+Value of test-statistic is: 0.1929 
+
+Critical value for a significance level of: 
+                10pct  5pct 2.5pct  1pct
+critical values 0.347 0.463  0.574 0.739
+
+
+> summary(ur.pp(dlor, type = "Z-tau", model = "constant"))
+
+################################## 
+# Phillips-Perron Unit Root Test # 
+################################## 
+
+Test regression with intercept 
+
+
+Call:
+lm(formula = y ~ y.l1)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.14175 -0.02344 -0.00446  0.02448  0.10313 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)  
+(Intercept) 0.005185   0.003108   1.668   0.0971 .
+y.l1        0.121432   0.077508   1.567   0.1191  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.0396 on 164 degrees of freedom
+Multiple R-squared:  0.01475,	Adjusted R-squared:  0.008739 
+F-statistic: 2.455 on 1 and 164 DF,  p-value: 0.1191
+
+
+Value of test-statistic, type: Z-tau  is: -11.3082 
+
+         aux. Z statistics
+Z-tau-mu            1.6644
+
+Critical values for Z statistics: 
+                   1pct      5pct     10pct
+critical values -3.4707 -2.878897 -2.575925
+
+
+> summary(ur.pp(dtr, type = "Z-tau", model = "constant"))
+
+################################## 
+# Phillips-Perron Unit Root Test # 
+################################## 
+
+Test regression with intercept 
+
+
+Call:
+lm(formula = y ~ y.l1)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.74115 -0.09583 -0.00360  0.09425  0.87236 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)   
+(Intercept) -0.00911    0.01338  -0.681  0.49691   
+y.l1         0.21616    0.07622   2.836  0.00515 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.172 on 164 degrees of freedom
+Multiple R-squared:  0.04674,	Adjusted R-squared:  0.04093 
+F-statistic: 8.042 on 1 and 164 DF,  p-value: 0.005147
+
+
+Value of test-statistic, type: Z-tau  is: -10.1747 
+
+         aux. Z statistics
+Z-tau-mu           -0.6741
+
+Critical values for Z statistics: 
+                   1pct      5pct     10pct
+critical values -3.4707 -2.878897 -2.575925
+
+
+> summary(ur.pp(dldol, type = "Z-tau", model = "constant"))
+
+################################## 
+# Phillips-Perron Unit Root Test # 
+################################## 
+
+Test regression with intercept 
+
+
+Call:
+lm(formula = y ~ y.l1)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.029045 -0.007856 -0.001387  0.006725  0.060456 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 0.0004947  0.0009695   0.510    0.611    
+y.l1        0.4138282  0.0711436   5.817 3.06e-08 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01246 on 164 degrees of freedom
+Multiple R-squared:  0.171,	Adjusted R-squared:  0.166 
+F-statistic: 33.84 on 1 and 164 DF,  p-value: 3.06e-08
+
+
+Value of test-statistic, type: Z-tau  is: -8.1365 
+
+         aux. Z statistics
+Z-tau-mu             0.503
+
+Critical values for Z statistics: 
+                   1pct      5pct     10pct
+critical values -3.4707 -2.878897 -2.575925
+
+
+> tr_est <- tr["2006-01-01/2019-09-01"]
+
+> tr_obs <- tr["2019-10-01/2019-12-01"]
+
+> length(tr_est)
+[1] 165
+
+> acf(diff(tr_est)[-1, ], main = "ACF de d.taux réel (échantillon d'estimation)")
+
+> pacf(diff(tr_est)[-1, ], main = "PACF de d.taux réel (échantillon d'estimation)")
+
+> mod1 <- Arima(tr_est, order = c(1, 1, 0))
+
+> mod2 <- Arima(tr_est, order = c(0, 1, 1))
+
+> mod3 <- Arima(tr_est, order = c(1, 1, 1))
+
+> mod4 <- Arima(tr_est, order = c(2, 1, 0))
+
+> mod5 <- Arima(tr_est, order = c(0, 1, 2))
+
+> mod6 <- Arima(tr_est, order = c(2, 1, 1))
+
+> mod7 <- Arima(tr_est, order = c(1, 1, 2))
+
+> mod8 <- Arima(tr_est, order = c(2, 1, 2))
+
+> AIC(mod1, mod2, mod3, mod4, mod5, mod6, mod7, mod8)
+     df       AIC
+mod1  2 -107.3702
+mod2  2 -108.4492
+mod3  3 -106.5865
+mod4  3 -106.6045
+mod5  3 -106.6041
+mod6  4 -104.8498
+mod7  4 -105.3910
+mod8  5 -103.3908
+
+> BIC(mod1, mod2, mod3, mod4, mod5, mod6, mod7, mod8)
+     df        BIC
+mod1  2 -101.17050
+mod2  2 -102.24942
+mod3  3  -97.28686
+mod4  3  -97.30494
+mod5  3  -97.30454
+mod6  4  -92.45036
+mod7  4  -92.99150
+mod8  5  -87.89142
+
+> meilleur_modele <- mod2
+
+> summary(meilleur_modele)
+Series: tr_est 
+ARIMA(0,1,1) 
+
+Coefficients:
+         ma1
+      0.2462
+s.e.  0.0780
+
+sigma^2 = 0.02966:  log likelihood = 56.22
+AIC=-108.45   AICc=-108.37   BIC=-102.25
+
+Training set error measures:
+                       ME      RMSE       MAE  MPE MAPE      MASE         ACF1
+Training set -0.009070497 0.1711866 0.1211827 -Inf  Inf 0.9647553 -0.009142519
+
+> coef(meilleur_modele)/sqrt(diag(meilleur_modele$var.coef))
+     ma1 
+3.156053 
+
+> res <- residuals(meilleur_modele)
+
+> plot(res, main = "Résidus de l'ARIMA(0,1,1)")
+
+> acf(res, main = "ACF des résidus")
+
+> pacf(res, main = "PACF des résidus")
+
+> Box.test(res, lag = 20, type = "Ljung-Box", fitdf = 1)
+
+	Box-Ljung test
+
+data:  res
+X-squared = 15.623, df = 19, p-value = 0.6823
+
+
+> ArchTest(res, lags = 20)
+
+	ARCH LM-test; Null hypothesis: no ARCH effects
+
+data:  res
+Chi-squared = 25.657, df = 20, p-value = 0.1774
+
+
+> ArchTest(res, lags = 12)
+
+	ARCH LM-test; Null hypothesis: no ARCH effects
+
+data:  res
+Chi-squared = 25.373, df = 12, p-value = 0.01315
+
+
+> jarque.bera.test(res)
+
+	Jarque Bera Test
+
+data:  res
+X-squared = 181.88, df = 2, p-value < 2.2e-16
+
+
+> checkresiduals(meilleur_modele)
+
+	Ljung-Box test
+
+data:  Residuals from ARIMA(0,1,1)
+Q* = 5.1895, df = 9, p-value = 0.8175
+
+Model df: 1.   Total lags used: 10
+
+
+> theta <- coef(meilleur_modele)["ma1"]
+
+> e_T <- as.numeric(tail(res, 1))
+
+> tr_T <- as.numeric(tail(tr_est, 1))
+
+> theta
+      ma1 
+0.2462315 
+
+> e_T
+[1] 0.1357489
+
+> tr_T
+[1] 0.11
+
+> dprev <- c(theta * e_T, 0, 0)
+
+> prev_manuelle <- tr_T + cumsum(dprev)
+
+> prev_manuelle
+      ma1                     
+0.1434257 0.1434257 0.1434257 
+
+> prev <- forecast(meilleur_modele, h = 3, level = 95)
+
+> prev$mean
+Time Series:
+Start = 166 
+End = 168 
+Frequency = 1 
+[1] 0.1434257 0.1434257 0.1434257
+
+> prev$lower
+Time Series:
+Start = 166 
+End = 168 
+Frequency = 1 
+            95%
+[1,] -0.1941460
+[2,] -0.3959599
+[3,] -0.5406204
+
+> prev$upper
+Time Series:
+Start = 166 
+End = 168 
+Frequency = 1 
+           95%
+[1,] 0.4809973
+[2,] 0.6828112
+[3,] 0.8274717
+
+> plot(prev, main = "Prévisions du taux réel (ARIMA(0,1,1)) et IC à 95 %")
+
+> comparaison <- cbind(observe = as.numeric(tr_obs), 
++     prevu = as.numeric(prev$mean), erreur = as.numeric(tr_obs) - 
++         as.numeric(prev$mean), borne_inf = as.numeric(prev$lower), 
++     borne_sup = as.numeric(prev$upper))
+
+> rownames(comparaison) <- c("oct. 2019 (h=1)", "nov. 2019 (h=2)", 
++     "déc. 2019 (h=3)")
+
+> round(comparaison, 3)
+                observe prevu erreur borne_inf borne_sup
+oct. 2019 (h=1)    0.15 0.143  0.007    -0.194     0.481
+nov. 2019 (h=2)    0.17 0.143  0.027    -0.396     0.683
+déc. 2019 (h=3)    0.14 0.143 -0.003    -0.541     0.827
+
+> RMSE_prev <- sqrt(mean(comparaison[, "erreur"]^2))
+
+> RMSE_prev
+[1] 0.01592851
+
+> RMSE_naif <- sqrt(mean((as.numeric(tr_obs) - tr_T)^2))
+
+> RMSE_naif
+[1] 0.0450925
+
+> data_var <- data.frame(dtr = as.numeric(dtr), dldol = as.numeric(dldol), 
++     dlor = as.numeric(dlor))
+
+> head(data_var)
+    dtr        dldol         dlor
+1  0.04  0.002109773  0.009049836
+2  0.15  0.002162090  0.003597126
+3  0.21 -0.006840158  0.092531719
+4  0.04 -0.022628494  0.099615732
+5  0.08  0.012037586 -0.124472024
+6 -0.02 -0.002576963  0.061808287
+
+> VARselect(data_var, lag.max = 6, type = "none")
+$selection
+AIC(n)  HQ(n)  SC(n) FPE(n) 
+     2      1      1      2 
+
+$criteria
+                   1             2             3             4             5
+AIC(n) -1.939188e+01 -1.944519e+01 -1.935381e+01 -1.928444e+01 -1.919898e+01
+HQ(n)  -1.932194e+01 -1.930531e+01 -1.914398e+01 -1.900468e+01 -1.884927e+01
+SC(n)  -1.921963e+01 -1.910068e+01 -1.883705e+01 -1.859543e+01 -1.833771e+01
+FPE(n)  3.786343e-09  3.590102e-09  3.934596e-09  4.219238e-09  4.599352e-09
+                   6
+AIC(n) -1.910690e+01
+HQ(n)  -1.868725e+01
+SC(n)  -1.807338e+01
+FPE(n)  5.048980e-09
+
+
+> modele <- VAR(data_var, p = 2, type = "none")
+
+> summary(modele)
+
+VAR Estimation Results:
+========================= 
+Endogenous variables: dtr, dldol, dlor 
+Deterministic variables: none 
+Sample size: 165 
+Log Likelihood: 901.04 
+Roots of the characteristic polynomial:
+0.5381 0.5381 0.3508 0.3508 0.2135 0.04334
+Call:
+VAR(y = data_var, p = 2, type = "none")
+
+
+Estimation results for equation dtr: 
+==================================== 
+dtr = dtr.l1 + dldol.l1 + dlor.l1 + dtr.l2 + dldol.l2 + dlor.l2 
+
+         Estimate Std. Error t value Pr(>|t|)   
+dtr.l1    0.18333    0.09117   2.011  0.04602 * 
+dldol.l1 -0.21620    1.18686  -0.182  0.85569   
+dlor.l1  -0.34427    0.39058  -0.881  0.37941   
+dtr.l2   -0.17220    0.09041  -1.905  0.05864 . 
+dldol.l2 -1.99436    1.18950  -1.677  0.09558 . 
+dlor.l2  -1.21954    0.39113  -3.118  0.00216 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 0.1677 on 159 degrees of freedom
+Multiple R-Squared: 0.1217,	Adjusted R-squared: 0.08853 
+F-statistic: 3.671 on 6 and 159 DF,  p-value: 0.001925 
+
+
+Estimation results for equation dldol: 
+====================================== 
+dldol = dtr.l1 + dldol.l1 + dlor.l1 + dtr.l2 + dldol.l2 + dlor.l2 
+
+           Estimate Std. Error t value Pr(>|t|)    
+dtr.l1   -0.0074983  0.0067744  -1.107   0.2700    
+dldol.l1  0.5092826  0.0881925   5.775 3.94e-08 ***
+dlor.l1   0.0030847  0.0290232   0.106   0.9155    
+dtr.l2   -0.0006905  0.0067184  -0.103   0.9183    
+dldol.l2 -0.1675721  0.0883886  -1.896   0.0598 .  
+dlor.l2  -0.0400591  0.0290642  -1.378   0.1700    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 0.01246 on 159 degrees of freedom
+Multiple R-Squared: 0.1996,	Adjusted R-squared: 0.1693 
+F-statistic: 6.607 on 6 and 159 DF,  p-value: 2.979e-06 
+
+
+Estimation results for equation dlor: 
+===================================== 
+dlor = dtr.l1 + dldol.l1 + dlor.l1 + dtr.l2 + dldol.l2 + dlor.l2 
+
+           Estimate Std. Error t value Pr(>|t|)
+dtr.l1   -0.0230346  0.0218806  -1.053    0.294
+dldol.l1 -0.1341888  0.2848535  -0.471    0.638
+dlor.l1   0.0691226  0.0937421   0.737    0.462
+dtr.l2   -0.0141129  0.0216999  -0.650    0.516
+dldol.l2 -0.0003831  0.2854871  -0.001    0.999
+dlor.l2  -0.0520174  0.0938746  -0.554    0.580
+
+
+Residual standard error: 0.04025 on 159 degrees of freedom
+Multiple R-Squared: 0.03443,	Adjusted R-squared: -0.002011 
+F-statistic: 0.9448 on 6 and 159 DF,  p-value: 0.4647 
+
+
+
+Covariance matrix of residuals:
+             dtr      dldol       dlor
+dtr    0.0281268  0.0008206 -0.0035672
+dldol  0.0008206  0.0001548 -0.0002043
+dlor  -0.0035672 -0.0002043  0.0015885
+
+Correlation matrix of residuals:
+          dtr   dldol    dlor
+dtr    1.0000  0.3932 -0.5337
+dldol  0.3932  1.0000 -0.4120
+dlor  -0.5337 -0.4120  1.0000
+
+
+
+> serial.test(modele, lags.pt = 12, type = "PT.asymptotic")
+
+	Portmanteau Test (asymptotic)
+
+data:  Residuals of VAR object modele
+Chi-squared = 80.963, df = 90, p-value = 0.7413
+
+
+> arch.test(modele, lags.multi = 12, multivariate.only = TRUE)
+
+	ARCH (multivariate)
+
+data:  Residuals of VAR object modele
+Chi-squared = 551.44, df = 432, p-value = 8.431e-05
+
+
+> normality.test(modele)
+$JB
+
+	JB-Test (multivariate)
+
+data:  Residuals of VAR object modele
+Chi-squared = 97.671, df = 6, p-value < 2.2e-16
+
+
+$Skewness
+
+	Skewness only (multivariate)
+
+data:  Residuals of VAR object modele
+Chi-squared = 16.808, df = 3, p-value = 0.000774
+
+
+$Kurtosis
+
+	Kurtosis only (multivariate)
+
+data:  Residuals of VAR object modele
+Chi-squared = 80.863, df = 3, p-value < 2.2e-16
+
+
+
+> roots(modele)
+[1] 0.53805772 0.53805772 0.35077865 0.35077865 0.21347536 0.04333864
+
+> causality(modele, cause = "dtr")
+$Granger
+
+	Granger causality H0: dtr do not Granger-cause dldol dlor
+
+data:  VAR object modele
+F-Test = 1.2767, df1 = 4, df2 = 477, p-value = 0.2782
+
+
+$Instant
+
+	H0: No instantaneous causality between: dtr and dldol dlor
+
+data:  VAR object modele
+Chi-squared = 39.901, df = 2, p-value = 2.165e-09
+
+
+
+> causality(modele, cause = "dldol")
+$Granger
+
+	Granger causality H0: dldol do not Granger-cause dtr dlor
+
+data:  VAR object modele
+F-Test = 1.6526, df1 = 4, df2 = 477, p-value = 0.1599
+
+
+$Instant
+
+	H0: No instantaneous causality between: dldol and dtr dlor
+
+data:  VAR object modele
+Chi-squared = 28.071, df = 2, p-value = 8.024e-07
+
+
+
+> causality(modele, cause = "dlor")
+$Granger
+
+	Granger causality H0: dlor do not Granger-cause dtr dldol
+
+data:  VAR object modele
+F-Test = 2.7446, df1 = 4, df2 = 477, p-value = 0.02799
+
+
+$Instant
+
+	H0: No instantaneous causality between: dlor and dtr dldol
+
+data:  VAR object modele
+Chi-squared = 40.327, df = 2, p-value = 1.75e-09
+
+
+
+> var_bi <- VAR(data_var[, c("dtr", "dlor")], p = 2, 
++     type = "none")
+
+> causality(var_bi, cause = "dtr")
+$Granger
+
+	Granger causality H0: dtr do not Granger-cause dlor
+
+data:  VAR object var_bi
+F-Test = 1.0768, df1 = 2, df2 = 322, p-value = 0.3419
+
+
+$Instant
+
+	H0: No instantaneous causality between: dtr and dlor
+
+data:  VAR object var_bi
+Chi-squared = 35.001, df = 1, p-value = 3.295e-09
+
+
+
+> causality(var_bi, cause = "dlor")
+$Granger
+
+	Granger causality H0: dlor do not Granger-cause dtr
+
+data:  VAR object var_bi
+F-Test = 4.0182, df1 = 2, df2 = 322, p-value = 0.0189
+
+
+$Instant
+
+	H0: No instantaneous causality between: dlor and dtr
+
+data:  VAR object var_bi
+Chi-squared = 35.001, df = 1, p-value = 3.295e-09
+
+
+
+> irf_or_taux <- irf(modele, impulse = "dtr", response = "dlor", 
++     n.ahead = 12, ci = 0.95)
+
+> plot(irf_or_taux)
+
+> irf_dol_taux <- irf(modele, impulse = "dtr", response = "dldol", 
++     n.ahead = 12, ci = 0.95)
+
+> plot(irf_dol_taux)
+
+> irf_or_dol <- irf(modele, impulse = "dldol", response = "dlor", 
++     n.ahead = 12, ci = 0.95)
+
+> plot(irf_or_dol)
+
+> irf_taux_or <- irf(modele, impulse = "dlor", response = "dtr", 
++     n.ahead = 12, ci = 0.95)
+
+> plot(irf_taux_or)
+
+> modele_inv <- VAR(data_var[, c("dlor", "dldol", "dtr")], 
++     p = 2, type = "none")
+
+> irf_or_taux_inv <- irf(modele_inv, impulse = "dtr", 
++     response = "dlor", n.ahead = 12, ci = 0.95)
+
+> plot(irf_or_taux_inv)
+
+> irf_taux_or_inv <- irf(modele_inv, impulse = "dlor", 
++     response = "dtr", n.ahead = 12, ci = 0.95)
+
+> plot(irf_taux_or_inv)
+
+> eq_lt <- lm(lor ~ tr)
+
+> summary(eq_lt)
+
+Call:
+lm(formula = lor ~ tr)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.38337 -0.08255 -0.01481  0.08788  0.29836 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  7.30557    0.01341  544.78   <2e-16 ***
+tr          -0.30462    0.01092  -27.89   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1226 on 166 degrees of freedom
+Multiple R-squared:  0.8241,	Adjusted R-squared:  0.8231 
+F-statistic:   778 on 1 and 166 DF,  p-value: < 2.2e-16
+
+
+> resid_lt <- xts(as.numeric(residuals(eq_lt)), order.by = index(lor))
+
+> plot(resid_lt, main = "Résidus de la relation de long terme log(or) ~ taux réel")
+
+> df1_lt <- ur.df(resid_lt, type = "none", selectlags = "BIC")
+
+> summary(df1_lt)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.123912 -0.022308  0.001507  0.023414  0.239167 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.11392    0.03025  -3.766 0.000231 ***
+z.diff.lag  0.11071    0.07524   1.472 0.143062    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.04597 on 164 degrees of freedom
+Multiple R-squared:  0.08486,	Adjusted R-squared:  0.0737 
+F-statistic: 7.604 on 2 and 164 DF,  p-value: 0.0006947
+
+
+Value of test-statistic is: -3.7661 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> df2_lt <- ur.df(resid_lt, type = "drift", selectlags = "BIC")
+
+> summary(df2_lt)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.12627 -0.02466 -0.00091  0.02104  0.23691 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.002363   0.003580   0.660 0.510180    
+z.lag.1     -0.114141   0.030303  -3.767 0.000231 ***
+z.diff.lag   0.108145   0.075467   1.433 0.153771    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.04605 on 163 degrees of freedom
+Multiple R-squared:  0.08499,	Adjusted R-squared:  0.07377 
+F-statistic:  7.57 on 2 and 163 DF,  p-value: 0.0007179
+
+
+Value of test-statistic is: -3.7667 7.285 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> po.test(cbind(lor, tr))
+
+	Phillips-Ouliaris Cointegration Test
+
+data:  cbind(lor, tr)
+Phillips-Ouliaris demeaned = -18.783, Truncation lag parameter = 1,
+p-value = 0.07123
+
+
+> lor_10 <- lor["2010-01-01/2019-12-01"]
+
+> tr_10 <- tr["2010-01-01/2019-12-01"]
+
+> eq_lt_10 <- lm(lor_10 ~ tr_10)
+
+> summary(eq_lt_10)
+
+Call:
+lm(formula = lor_10 ~ tr_10)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.165823 -0.065912 -0.005533  0.051336  0.227717 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  7.26878    0.01104  658.54   <2e-16 ***
+tr_10       -0.17137    0.01695  -10.11   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.09299 on 118 degrees of freedom
+Multiple R-squared:  0.4641,	Adjusted R-squared:  0.4596 
+F-statistic: 102.2 on 1 and 118 DF,  p-value: < 2.2e-16
+
+
+> resid_lt_10 <- xts(as.numeric(residuals(eq_lt_10)), 
++     order.by = index(lor_10))
+
+> summary(ur.df(resid_lt_10, type = "none", selectlags = "BIC"))
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.073736 -0.015702  0.000786  0.017406  0.074209 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)  
+z.lag.1    -0.05331    0.02769  -1.925   0.0567 .
+z.diff.lag  0.18069    0.09136   1.978   0.0503 .
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.02759 on 116 degrees of freedom
+Multiple R-squared:  0.05376,	Adjusted R-squared:  0.03744 
+F-statistic: 3.295 on 2 and 116 DF,  p-value: 0.04057
+
+
+Value of test-statistic is: -1.925 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> lag_resid_lt <- lag.xts(resid_lt, k = 1)[-1, ]
+
+> ecm_or <- lm(dlor ~ lag_resid_lt + dtr + dldol)
+
+> summary(ecm_or)
+
+Call:
+lm(formula = dlor ~ lag_resid_lt + dtr + dldol)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.114618 -0.020950  0.000534  0.018169  0.105144 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)   0.005421   0.002584   2.098 0.037486 *  
+lag_resid_lt -0.023279   0.022012  -1.058 0.291833    
+dtr          -0.099304   0.016560  -5.997 1.26e-08 ***
+dldol        -0.695084   0.204533  -3.398 0.000852 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03316 on 163 degrees of freedom
+Multiple R-squared:  0.3132,	Adjusted R-squared:  0.3006 
+F-statistic: 24.78 on 3 and 163 DF,  p-value: 2.904e-13
+
+
+> ecm_taux <- lm(dtr ~ lag_resid_lt + dlor + dldol)
+
+> summary(ecm_taux)
+
+Call:
+lm(formula = dtr ~ lag_resid_lt + dlor + dldol)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.48481 -0.07811  0.00012  0.05992  0.65942 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  -0.002776   0.011210  -0.248  0.80472    
+lag_resid_lt -0.367670   0.090067  -4.082 6.97e-05 ***
+dlor         -1.820029   0.303511  -5.997 1.26e-08 ***
+dldol         2.578410   0.883327   2.919  0.00401 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.142 on 163 degrees of freedom
+Multiple R-squared:  0.3551,	Adjusted R-squared:  0.3433 
+F-statistic: 29.92 on 3 and 163 DF,  p-value: 1.829e-15
+
+
+> library(strucchange)
+
+> rupt <- data.frame(dlor = as.numeric(dlor), dtr = as.numeric(dtr), 
++     dldol = as.numeric(dldol))
+
+> rownames(rupt) <- as.character(index(dlor))
+
+> n_rupt <- nrow(rupt)
+
+> obs_lehman <- which(index(dlor) == as.Date("2008-09-01"))
+
+> sctest(dlor ~ dtr + dldol, data = rupt, type = "Chow", 
++     point = obs_lehman)
+
+	Chow test
+
+data:  dlor ~ dtr + dldol
+F = 6.2714, p-value = 0.0004727
+
+
+> fs <- Fstats(dlor ~ dtr + dldol, data = rupt, from = 0.15)
+
+> sctest(fs, type = "supF")
+
+	supF test
+
+data:  fs
+sup.F = 24.723, p-value = 0.0004138
+
+
+> index(dlor)[fs$breakpoint]
+[1] "2008-08-01"
+
+> plot(fs, main = "Statistiques de Chow (F) pour chaque date de rupture possible")
+
+> plot(efp(dlor ~ dtr + dldol, data = rupt, type = "Rec-CUSUM"), 
++     main = "CUSUM : stabilité de la relation d.log(or) ~ d.taux + d.dollar")
+
+> sctest(efp(dlor ~ dtr + dldol, data = rupt, type = "Rec-CUSUM"))
+
+	Recursive CUSUM test
+
+data:  efp(dlor ~ dtr + dldol, data = rupt, type = "Rec-CUSUM")
+S = 0.44754, p-value = 0.7454
+
+
+> crise <- index(dlor) >= as.Date("2008-09-01") & index(dlor) <= 
++     as.Date("2009-12-01")
+
+> sd_tab <- rbind(`2006-2008 (avant sept. 2008)` = sapply(list(dlor, 
++     dtr, dldol), function(x) sd(x[index(x) < as.Date("2008-09-01")])), 
++     `sept. 2008 - déc. 2009` = sapply(list(dlor, dtr, dldol), 
++         function(x) sd(x[crise])), `2010-2019` = sapply(list(dlor, 
++         dtr, dldol), function(x) sd(x[index(x) >= as.Date("2010-01-01")])))
+
+> colnames(sd_tab) <- c("d.log(or)", "d.taux réel", 
++     "d.log(dollar)")
+
+> round(sd_tab, 4)
+                             d.log(or) d.taux réel d.log(dollar)
+2006-2008 (avant sept. 2008)    0.0556      0.1772        0.0110
+sept. 2008 - déc. 2009          0.0446      0.3286        0.0256
+2010-2019                       0.0334      0.1459        0.0118
+
+> summary(ur.za(as.numeric(lor), model = "intercept"))
+
+################################ 
+# Zivot-Andrews Unit Root Test # 
+################################ 
+
+
+Call:
+lm(formula = testmat)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.138213 -0.022841 -0.000672  0.021968  0.115850 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  4.080e-01  1.204e-01   3.388 0.000883 ***
+y.l1         9.396e-01  1.836e-02  51.172  < 2e-16 ***
+trend       -8.988e-05  8.773e-05  -1.024 0.307122    
+du           3.887e-02  1.398e-02   2.780 0.006076 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03839 on 163 degrees of freedom
+  (1 observation deleted due to missingness)
+Multiple R-squared:  0.9824,	Adjusted R-squared:  0.9821 
+F-statistic:  3032 on 3 and 163 DF,  p-value: < 2.2e-16
+
+
+Teststatistic: -3.2911 
+Critical values: 0.01= -5.34 0.05= -4.8 0.1= -4.58 
+
+Potential break point at position: 35 
+
+
+> summary(ur.za(as.numeric(tr), model = "intercept"))
+
+################################ 
+# Zivot-Andrews Unit Root Test # 
+################################ 
+
+
+Call:
+lm(formula = testmat)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.50928 -0.09270 -0.00538  0.09296  0.85158 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.1772992  0.0587101   3.020 0.002936 ** 
+y.l1         0.9256301  0.0228967  40.426  < 2e-16 ***
+trend        0.0002561  0.0004018   0.637 0.524806    
+du          -0.1823121  0.0511094  -3.567 0.000474 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1687 on 163 degrees of freedom
+  (1 observation deleted due to missingness)
+Multiple R-squared:  0.9628,	Adjusted R-squared:  0.9621 
+F-statistic:  1406 on 3 and 163 DF,  p-value: < 2.2e-16
+
+
+Teststatistic: -3.2481 
+Critical values: 0.01= -5.34 0.05= -4.8 0.1= -4.58 
+
+Potential break point at position: 35 
+
+
+> sapply(1:8, function(k) ur.df(tr, type = "none", lags = k)@teststat[1])
+[1] -1.770484 -1.845486 -2.012742 -2.015341 -2.115315 -2.118708 -1.897056
+[8] -1.972912
+
+> crise_d <- as.numeric(crise)
+
+> mod_crise <- lm(dlor ~ dtr + dldol + crise_d + crise_d:dtr, 
++     data = rupt)
+
+> summary(mod_crise)
+
+Call:
+lm(formula = dlor ~ dtr + dldol + crise_d + crise_d:dtr, data = rupt)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.109194 -0.017972  0.000747  0.018758  0.107318 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.003965   0.002653   1.495   0.1370    
+dtr         -0.116205   0.017857  -6.508 9.10e-10 ***
+dldol       -0.826308   0.202634  -4.078 7.11e-05 ***
+crise_d      0.016101   0.008559   1.881   0.0617 .  
+dtr:crise_d  0.080721   0.031389   2.572   0.0110 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03244 on 162 degrees of freedom
+Multiple R-squared:  0.3469,	Adjusted R-squared:  0.3308 
+F-statistic: 21.51 on 4 and 162 DF,  p-value: 2.993e-14
+
+
+> mod_sans <- lm(dlor ~ dtr + dldol, data = rupt)
+
+> anova(mod_sans, mod_crise)
+Analysis of Variance Table
+
+Model 1: dlor ~ dtr + dldol
+Model 2: dlor ~ dtr + dldol + crise_d + crise_d:dtr
+  Res.Df     RSS Df Sum of Sq      F   Pr(>F)   
+1    164 0.18050                                
+2    162 0.17048  2  0.010021 4.7613 0.009788 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+> lor10 <- lor["2010-01-01/2019-12-01"]
+
+> tr10 <- tr["2010-01-01/2019-12-01"]
+
+> ldol10 <- ldol["2010-01-01/2019-12-01"]
+
+> length(lor10)
+[1] 120
+
+> dlor10 <- diff(lor10)[-1, ]
+
+> dtr10 <- diff(tr10)[-1, ]
+
+> dldol10 <- diff(ldol10)[-1, ]
+
+> for (s in list(lor10 = lor10, tr10 = tr10, ldol10 = ldol10)) {
++     print(summary(ur.df(s, type = "drift", selectlags = "BIC")))
++ }
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.082235 -0.021794 -0.002613  0.019832  0.110635 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)   
+(Intercept)  0.37145    0.17060   2.177  0.03150 * 
+z.lag.1     -0.05134    0.02370  -2.166  0.03237 * 
+z.diff.lag   0.26597    0.08899   2.989  0.00342 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03214 on 115 degrees of freedom
+Multiple R-squared:  0.09692,	Adjusted R-squared:  0.08122 
+F-statistic: 6.171 on 2 and 115 DF,  p-value: 0.002846
+
+
+Value of test-statistic is: -2.166 2.5684 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.42478 -0.08575 -0.00415  0.07718  0.49919 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)   
+(Intercept)  0.01890    0.01695   1.115  0.26726   
+z.lag.1     -0.06667    0.02626  -2.539  0.01245 * 
+z.diff.lag   0.23419    0.08905   2.630  0.00971 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.141 on 115 degrees of freedom
+Multiple R-squared:  0.09572,	Adjusted R-squared:  0.07999 
+F-statistic: 6.086 on 2 and 115 DF,  p-value: 0.003072
+
+
+Value of test-statistic is: -2.539 3.4464 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+       Min         1Q     Median         3Q        Max 
+-0.0257436 -0.0066873 -0.0005669  0.0066866  0.0310772 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.030635   0.046172   0.663    0.508    
+z.lag.1     -0.006396   0.009988  -0.640    0.523    
+z.diff.lag   0.365914   0.086772   4.217 4.96e-05 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01107 on 115 degrees of freedom
+Multiple R-squared:  0.1344,	Adjusted R-squared:  0.1193 
+F-statistic: 8.925 on 2 and 115 DF,  p-value: 0.0002494
+
+
+Value of test-statistic is: -0.6403 0.7479 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.46 -2.88 -2.57
+phi1  6.52  4.63  3.81
+
+
+> for (s in list(dlor10 = dlor10, dtr10 = dtr10, dldol10 = dldol10)) {
++     print(summary(ur.df(s, type = "none", selectlags = "BIC")))
++ }
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.074504 -0.019897  0.000893  0.025979  0.104849 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.80052    0.11372  -7.040  1.5e-10 ***
+z.diff.lag  0.07015    0.09282   0.756    0.451    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.03271 on 115 degrees of freedom
+Multiple R-squared:  0.3775,	Adjusted R-squared:  0.3667 
+F-statistic: 34.87 on 2 and 115 DF,  p-value: 1.456e-12
+
+
+Value of test-statistic is: -7.0396 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.44964 -0.09807 -0.01484  0.07672  0.54399 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.80948    0.11653  -6.947 2.38e-10 ***
+z.diff.lag  0.03074    0.09307   0.330    0.742    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.1449 on 115 degrees of freedom
+Multiple R-squared:  0.394,	Adjusted R-squared:  0.3834 
+F-statistic: 37.38 on 2 and 115 DF,  p-value: 3.111e-13
+
+
+Value of test-statistic is: -6.9467 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression none 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 - 1 + z.diff.lag)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.024442 -0.006902 -0.000018  0.008069  0.032115 
+
+Coefficients:
+           Estimate Std. Error t value Pr(>|t|)    
+z.lag.1    -0.69247    0.10214  -6.780 5.46e-10 ***
+z.diff.lag  0.13067    0.09124   1.432    0.155    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01097 on 115 degrees of freedom
+Multiple R-squared:  0.3184,	Adjusted R-squared:  0.3065 
+F-statistic: 26.86 on 2 and 115 DF,  p-value: 2.682e-10
+
+
+Value of test-statistic is: -6.7797 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau1 -2.58 -1.95 -1.62
+
+
+> mod_10 <- Arima(tr10, order = c(0, 1, 1))
+
+> mod_10
+Series: tr10 
+ARIMA(0,1,1) 
+
+Coefficients:
+         ma1
+      0.2525
+s.e.  0.1042
+
+sigma^2 = 0.02044:  log likelihood = 63.09
+AIC=-122.17   AICc=-122.07   BIC=-116.61
+
+> Arima(tr, order = c(0, 1, 1))
+Series: tr 
+ARIMA(0,1,1) 
+
+Coefficients:
+         ma1
+      0.2462
+s.e.  0.0769
+
+sigma^2 = 0.02914:  log likelihood = 58.74
+AIC=-113.48   AICc=-113.41   BIC=-107.24
+
+> data_var10 <- data.frame(dtr = as.numeric(dtr10), 
++     dldol = as.numeric(dldol10), dlor = as.numeric(dlor10))
+
+> VARselect(data_var10, lag.max = 6, type = "none")
+$selection
+AIC(n)  HQ(n)  SC(n) FPE(n) 
+     1      1      1      1 
+
+$criteria
+                   1             2             3             4             5
+AIC(n) -2.022503e+01 -2.013853e+01 -2.002455e+01 -1.997249e+01 -1.991644e+01
+HQ(n)  -2.013689e+01 -1.996224e+01 -1.976011e+01 -1.961990e+01 -1.947570e+01
+SC(n)  -2.000781e+01 -1.970408e+01 -1.937287e+01 -1.910359e+01 -1.883031e+01
+FPE(n)  1.645870e-09  1.795047e-09  2.013209e-09  2.123752e-09  2.251403e-09
+                   6
+AIC(n) -1.985672e+01
+HQ(n)  -1.932783e+01
+SC(n)  -1.855336e+01
+FPE(n)  2.398297e-09
+
+
+> modele10 <- VAR(data_var10, p = 1, type = "none")
+
+> summary(modele10)
+
+VAR Estimation Results:
+========================= 
+Endogenous variables: dtr, dldol, dlor 
+Deterministic variables: none 
+Sample size: 118 
+Log Likelihood: 693.251 
+Roots of the characteristic polynomial:
+0.3997 0.254 0.08174
+Call:
+VAR(y = data_var10, p = 1, type = "none")
+
+
+Estimation results for equation dtr: 
+==================================== 
+dtr = dtr.l1 + dldol.l1 + dlor.l1 
+
+         Estimate Std. Error t value Pr(>|t|)
+dtr.l1     0.1696     0.1105   1.535    0.128
+dldol.l1  -0.7981     1.1812  -0.676    0.501
+dlor.l1   -0.4568     0.5030  -0.908    0.366
+
+
+Residual standard error: 0.1445 on 115 degrees of freedom
+Multiple R-Squared: 0.05515,	Adjusted R-squared: 0.0305 
+F-statistic: 2.237 on 3 and 115 DF,  p-value: 0.08764 
+
+
+Estimation results for equation dldol: 
+====================================== 
+dldol = dtr.l1 + dldol.l1 + dlor.l1 
+
+          Estimate Std. Error t value Pr(>|t|)    
+dtr.l1   -0.005567   0.008503  -0.655    0.514    
+dldol.l1  0.367137   0.090893   4.039 9.71e-05 ***
+dlor.l1  -0.023707   0.038703  -0.613    0.541    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 0.01112 on 115 degrees of freedom
+Multiple R-Squared: 0.1468,	Adjusted R-squared: 0.1245 
+F-statistic: 6.594 on 3 and 115 DF,  p-value: 0.0003758 
+
+
+Estimation results for equation dlor: 
+===================================== 
+dlor = dtr.l1 + dldol.l1 + dlor.l1 
+
+          Estimate Std. Error t value Pr(>|t|)  
+dtr.l1   -0.009226   0.025032  -0.369   0.7131  
+dldol.l1 -0.223979   0.267573  -0.837   0.4043  
+dlor.l1   0.198753   0.113934   1.744   0.0837 .
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 0.03273 on 115 degrees of freedom
+Multiple R-Squared: 0.06888,	Adjusted R-squared: 0.04459 
+F-statistic: 2.836 on 3 and 115 DF,  p-value: 0.04125 
+
+
+
+Covariance matrix of residuals:
+             dtr      dldol      dlor
+dtr    0.0208371  0.0003682 -0.002641
+dldol  0.0003682  0.0001225 -0.000113
+dlor  -0.0026412 -0.0001130  0.001065
+
+Correlation matrix of residuals:
+          dtr   dldol    dlor
+dtr    1.0000  0.2305 -0.5606
+dldol  0.2305  1.0000 -0.3129
+dlor  -0.5606 -0.3129  1.0000
+
+
+
+> serial.test(modele10, lags.pt = 12, type = "PT.asymptotic")
+
+	Portmanteau Test (asymptotic)
+
+data:  Residuals of VAR object modele10
+Chi-squared = 94.468, df = 99, p-value = 0.6101
+
+
+> roots(modele10)
+[1] 0.39974390 0.25398453 0.08174198
+
+> causality(modele10, cause = "dtr")
+$Granger
+
+	Granger causality H0: dtr do not Granger-cause dldol dlor
+
+data:  VAR object modele10
+F-Test = 0.39139, df1 = 2, df2 = 345, p-value = 0.6764
+
+
+$Instant
+
+	H0: No instantaneous causality between: dtr and dldol dlor
+
+data:  VAR object modele10
+Chi-squared = 28.533, df = 2, p-value = 6.371e-07
+
+
+
+> causality(modele10, cause = "dlor")
+$Granger
+
+	Granger causality H0: dlor do not Granger-cause dtr dldol
+
+data:  VAR object modele10
+F-Test = 0.50028, df1 = 2, df2 = 345, p-value = 0.6068
+
+
+$Instant
+
+	H0: No instantaneous causality between: dlor and dtr dldol
+
+data:  VAR object modele10
+Chi-squared = 30.504, df = 2, p-value = 2.378e-07
+
+
+
+> var_bi10 <- VAR(data_var10[, c("dtr", "dlor")], p = 1, 
++     type = "none")
+
+> causality(var_bi10, cause = "dtr")
+$Granger
+
+	Granger causality H0: dtr do not Granger-cause dlor
+
+data:  VAR object var_bi10
+F-Test = 0.14422, df1 = 1, df2 = 232, p-value = 0.7045
+
+
+$Instant
+
+	H0: No instantaneous causality between: dtr and dlor
+
+data:  VAR object var_bi10
+Chi-squared = 27.721, df = 1, p-value = 1.401e-07
+
+
+
+> causality(var_bi10, cause = "dlor")
+$Granger
+
+	Granger causality H0: dlor do not Granger-cause dtr
+
+data:  VAR object var_bi10
+F-Test = 0.56768, df1 = 1, df2 = 232, p-value = 0.4519
+
+
+$Instant
+
+	H0: No instantaneous causality between: dlor and dtr
+
+data:  VAR object var_bi10
+Chi-squared = 27.721, df = 1, p-value = 1.401e-07
+
+
+
+> irf10_or_taux <- irf(modele10, impulse = "dtr", response = "dlor", 
++     n.ahead = 12, ci = 0.95)
+
+> plot(irf10_or_taux)
+
+> irf10_or_dol <- irf(modele10, impulse = "dldol", response = "dlor", 
++     n.ahead = 12, ci = 0.95)
+
+> plot(irf10_or_dol)
+
+> beta_c <- coef(summary(lm(dlor ~ dtr + dldol)))["dtr", 
++     ]
+
+> beta_10 <- coef(summary(lm(dlor10 ~ dtr10 + dldol10)))["dtr10", 
++     ]
+
+> synthese <- rbind(`2006-2019 (avec crise)` = beta_c, 
++     `2010-2019 (sans crise)` = beta_10)
+
+> round(synthese, 4)
+                       Estimate Std. Error t value Pr(>|t|)
+2006-2019 (avec crise)  -0.0941     0.0158 -5.9503        0
+2010-2019 (sans crise)  -0.1183     0.0171 -6.9175        0
+
+> dev.off()
+null device 
+          1 
